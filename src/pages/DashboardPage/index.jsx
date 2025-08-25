@@ -11,10 +11,9 @@ import { cartStocks, allStocks as allStocksData } from "./dummyData";
 import {
   addToGroup as addToGroupUtil,
   removeFromGroup as removeFromGroupUtil,
-  findContainerOf as findContainerOfUtil,
 } from "../../utils/dashboardUtils";
 
-/* ===== UI 조각 ===== */
+/* ===== 종목 카드 ===== */
 function StockCard({ symbol, name, dragging }) {
   return (
     <div
@@ -28,17 +27,43 @@ function StockCard({ symbol, name, dragging }) {
   );
 }
 
-function DraggableStock({ item, draggableId }) {
+/* ===== 드래그 가능한 종목 (삭제 버튼 분리/충돌 방지) ===== */
+function DraggableStock({ item, draggableId, removable, onRemove }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useDraggable({ id: draggableId, data: { type: "stock", item } });
+
   const style = { transform: CSS.Translate.toString(transform) };
+
   return (
-    <div ref={setNodeRef} style={style} {...listeners} {...attributes}>
-      <StockCard {...item} dragging={isDragging} />
+    <div ref={setNodeRef} style={style} className="relative">
+      {/* 드래그 핸들은 카드 본문에만 부착 */}
+      <div {...listeners} {...attributes}>
+        <StockCard {...item} dragging={isDragging} />
+      </div>
+
+      {/* 그룹 내 삭제 버튼 */}
+      {removable && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            onRemove?.(item);
+          }}
+          className="absolute top-1 right-1 inline-flex items-center justify-center
+                     w-6 h-6 rounded-full bg-gray-200 text-gray-700 hover:bg-red-500 hover:text-white
+                     text-xs"
+          aria-label={`${item.symbol} 삭제`}
+          title="삭제"
+        >
+          ✕
+        </button>
+      )}
     </div>
   );
 }
 
+/* ===== 그룹(드롭 가능) ===== */
 function DroppableGroup({ id, title, headerRight, children }) {
   const { setNodeRef, isOver } = useDroppable({ id, data: { type: "group" } });
   return (
@@ -57,6 +82,7 @@ function DroppableGroup({ id, title, headerRight, children }) {
   );
 }
 
+/* ===== 장바구니/검색 패널(소스 전용) ===== */
 function BasketPanel({ title, hint, children }) {
   return (
     <div className="flex flex-col bg-gray-50 rounded-xl border border-gray-200">
@@ -69,19 +95,18 @@ function BasketPanel({ title, hint, children }) {
   );
 }
 
-/* ===== 메인 페이지 ===== */
 export default function Dashboard() {
-  // 장바구니(소스), 전체 종목(검색용)
-  const [cart] = useState(cartStocks);
-  const [allStocks] = useState(allStocksData);
+  /* 소스 데이터 */
+  const [cart] = useState(cartStocks); // 장바구니는 '소스'라서 복사만 허용
+  const [allStocks] = useState(allStocksData); // 검색용 전체 종목
 
-  // 그룹 상태
+  /* 그룹 상태 */
   const [groups, setGroups] = useState([
     { id: "group-1", name: "그룹 1", items: [] },
     { id: "group-2", name: "그룹 2", items: [] },
   ]);
 
-  // 검색
+  /* 검색 */
   const [q, setQ] = useState("");
   const showSearch = q.trim().length > 0;
   const basketList = useMemo(() => {
@@ -93,10 +118,10 @@ export default function Dashboard() {
     );
   }, [showSearch, q, cart, allStocks]);
 
-  // 드래그 미리보기
+  /* 드래그 미리보기 */
   const [activeItem, setActiveItem] = useState(null);
 
-  // DnD 핸들러
+  /* DnD 핸들러 */
   const onDragStart = (e) => {
     const it = e.active.data.current?.item;
     setActiveItem(it || null);
@@ -110,23 +135,26 @@ export default function Dashboard() {
     const item = active.data.current?.item;
     if (!item) return;
 
-    // ✅ active.id는 'cart:AAPL' 형태이므로, 실제 판별은 item.id로
-    const fromId = findContainerOfUtil(groups, cart, item.id); // "cart" | "group-x" | null
-    const toId = over.id; // 드롭된 그룹 id
+    const toId = over.id; // 드롭된 그룹 id (예: 'group-1')
+
+    // 출발 컨테이너는 draggableId의 prefix로 판단: 'cart:AAPL', 'search:AMZN', 'group-2:NFLX'
+    const [fromContainer] = String(active.id).split(":");
+    const isCopy = fromContainer === "cart" || fromContainer === "search"; // 소스 → 그룹 = 복사
+    const fromId = isCopy ? null : fromContainer; // 이동일 때만 원본 그룹 id 필요
 
     if (!toId || fromId === toId) return;
 
-    const isCopy = fromId === "cart" || fromId === null; // 장바구니/검색 → 그룹 = 복사
     setGroups((prev) => {
       let updated = prev;
-      if (!isCopy) {
-        updated = removeFromGroupUtil(updated, fromId, item.id);
+      if (!isCopy && fromId) {
+        updated = removeFromGroupUtil(updated, fromId, item.id); // 그룹A → 그룹B 이동 시 원본 제거
       }
+      // 대상 그룹에 중복 없이 추가 (같은 종목을 여러 그룹에 담는 건 허용)
       return addToGroupUtil(updated, toId, item);
     });
   };
 
-  // 그룹 추가/결과 버튼
+  /* 그룹 조작 */
   const addGroup = () => {
     const nextIdx = groups.length + 1;
     setGroups((prev) => [
@@ -137,6 +165,10 @@ export default function Dashboard() {
 
   const handleViewResult = (group) => {
     alert(`${group.name} 결과 보기 (종목 ${group.items.length}개)`);
+  };
+
+  const handleRemoveFromGroup = (groupId, stockId) => {
+    setGroups((prev) => removeFromGroupUtil(prev, groupId, stockId));
   };
 
   return (
@@ -158,7 +190,7 @@ export default function Dashboard() {
         onDragEnd={onDragEnd}
       >
         <div className="grid grid-cols-12 gap-4">
-          {/* 좌: 검색 + 장바구니(소스) */}
+          {/* 좌: 검색 + 장바구니(소스 전용) */}
           <div className="col-span-4">
             <div className="mb-3">
               <input
@@ -178,16 +210,17 @@ export default function Dashboard() {
               ) : (
                 basketList.map((item) => (
                   <DraggableStock
-                    key={`cart-${item.id}`}
-                    draggableId={`cart:${item.id}`} // ✅ 장바구니 prefix로 고유화
+                    key={`${showSearch ? "search" : "cart"}-${item.id}`}
+                    draggableId={`${showSearch ? "search" : "cart"}:${item.id}`} // ✅ 출발지 prefix 부여
                     item={item}
+                    removable={false}
                   />
                 ))
               )}
             </BasketPanel>
           </div>
 
-          {/* 우: 그룹들(드롭 가능) */}
+          {/* 우: 그룹들(드롭 가능 + 항목 삭제 가능) */}
           <div className="col-span-8 flex flex-col gap-4">
             {groups.map((g) => (
               <DroppableGroup
@@ -212,8 +245,10 @@ export default function Dashboard() {
                     {g.items.map((item) => (
                       <DraggableStock
                         key={`${g.id}-${item.id}`}
-                        draggableId={`${g.id}:${item.id}`} // ✅ 그룹 prefix로 고유화
+                        draggableId={`${g.id}:${item.id}`} // ✅ 그룹 prefix 부여
                         item={item}
+                        removable
+                        onRemove={() => handleRemoveFromGroup(g.id, item.id)}
                       />
                     ))}
                   </div>
