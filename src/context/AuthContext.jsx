@@ -8,7 +8,9 @@ export const useAuth = () => useContext(AuthContext);
 
 export default function AuthProvider({ children }) {
   // 메모리 상의 “DB” 흉내: 새로고침하면 사라짐
-  const [users, setUsers] = useState([]); // [{name,email,password}]
+  const [users, setUsers] = useState([
+    { name: "홍길동", email: "email@email.com", password: "123456" },
+  ]); // [{name,email,password}]
   const [currentUser, setCurrentUser] = useState(null);
 
   const signup = ({ name, email, password }) => {
