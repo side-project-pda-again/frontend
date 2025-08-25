@@ -1,9 +1,9 @@
 import { createBrowserRouter } from "react-router-dom";
 import Layout from "../components/layout/Layout";
-
+import ProtectedRoute from "./ProtectRoute";
 import LoginPage from "../pages/LoginPage";
 import RegisterPage from "../pages/RegisterPage";
-import MyPage from "../pages/MyPage";
+import DashboardPage from "../pages/DashboardPage";
 
 export const router = createBrowserRouter([
   {
@@ -13,9 +13,10 @@ export const router = createBrowserRouter([
       { path: "/", element: <LoginPage /> },
       { path: "/register", element: <RegisterPage /> },
       {
-        path: "/my-page",
-        element: <MyPage />,
+        element: <ProtectedRoute />, // 보호 라우트 래퍼
+        children: [{ path: "/dashboard", element: <DashboardPage /> }],
       },
     ],
   },
+  { path: "*", element: <LoginPage /> },
 ]);
