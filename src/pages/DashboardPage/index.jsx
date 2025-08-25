@@ -9,8 +9,11 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { cartStocks, allStocks as allStocksData } from "./dummyData";
 import {
-  addToGroup as addToGroupUtil,
-  removeFromGroup as removeFromGroupUtil,
+  addToGroup,
+  removeFromGroup,
+  addGroup,
+  deleteGroup,
+  updateGroupName,
 } from "../../utils/dashboardUtils";
 
 /* ===== 종목 카드 ===== */
@@ -27,7 +30,7 @@ function StockCard({ symbol, name, dragging }) {
   );
 }
 
-/* ===== 드래그 가능한 종목 (삭제 버튼 분리/충돌 방지) ===== */
+/* ===== 드래그 가능한 종목 ===== */
 function DraggableStock({ item, draggableId, removable, onRemove }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useDraggable({ id: draggableId, data: { type: "stock", item } });
@@ -64,7 +67,7 @@ function DraggableStock({ item, draggableId, removable, onRemove }) {
 }
 
 /* ===== 그룹(드롭 가능) ===== */
-function DroppableGroup({ id, title, headerRight, children }) {
+function DroppableGroup({ id, header, children }) {
   const { setNodeRef, isOver } = useDroppable({ id, data: { type: "group" } });
   return (
     <div
@@ -73,16 +76,13 @@ function DroppableGroup({ id, title, headerRight, children }) {
         isOver ? "border-indigo-400" : "border-gray-200"
       }`}
     >
-      <div className="flex items-center justify-between px-4 py-2 border-b bg-white rounded-t-xl">
-        <h3 className="font-semibold">{title}</h3>
-        {headerRight}
-      </div>
+      {header}
       <div className="p-3 flex flex-col gap-2">{children}</div>
     </div>
   );
 }
 
-/* ===== 장바구니/검색 패널(소스 전용) ===== */
+/* ===== 장바구니/검색 패널 ===== */
 function BasketPanel({ title, hint, children }) {
   return (
     <div className="flex flex-col bg-gray-50 rounded-xl border border-gray-200">
@@ -97,14 +97,18 @@ function BasketPanel({ title, hint, children }) {
 
 export default function Dashboard() {
   /* 소스 데이터 */
-  const [cart] = useState(cartStocks); // 장바구니는 '소스'라서 복사만 허용
-  const [allStocks] = useState(allStocksData); // 검색용 전체 종목
+  const [cart] = useState(cartStocks);
+  const [allStocks] = useState(allStocksData);
 
   /* 그룹 상태 */
   const [groups, setGroups] = useState([
     { id: "group-1", name: "그룹 1", items: [] },
     { id: "group-2", name: "그룹 2", items: [] },
   ]);
+
+  /* 그룹명 편집 상태 */
+  const [editingGroupId, setEditingGroupId] = useState(null);
+  const [editingName, setEditingName] = useState("");
 
   /* 검색 */
   const [q, setQ] = useState("");
@@ -135,32 +139,55 @@ export default function Dashboard() {
     const item = active.data.current?.item;
     if (!item) return;
 
-    const toId = over.id; // 드롭된 그룹 id (예: 'group-1')
-
-    // 출발 컨테이너는 draggableId의 prefix로 판단: 'cart:AAPL', 'search:AMZN', 'group-2:NFLX'
+    const toId = over.id;
     const [fromContainer] = String(active.id).split(":");
-    const isCopy = fromContainer === "cart" || fromContainer === "search"; // 소스 → 그룹 = 복사
-    const fromId = isCopy ? null : fromContainer; // 이동일 때만 원본 그룹 id 필요
+    const isCopy = fromContainer === "cart" || fromContainer === "search";
+    const fromId = isCopy ? null : fromContainer;
 
     if (!toId || fromId === toId) return;
 
     setGroups((prev) => {
       let updated = prev;
       if (!isCopy && fromId) {
-        updated = removeFromGroupUtil(updated, fromId, item.id); // 그룹A → 그룹B 이동 시 원본 제거
+        updated = removeFromGroup(updated, fromId, item.id);
       }
-      // 대상 그룹에 중복 없이 추가 (같은 종목을 여러 그룹에 담는 건 허용)
-      return addToGroupUtil(updated, toId, item);
+      return addToGroup(updated, toId, item);
     });
   };
 
   /* 그룹 조작 */
-  const addGroup = () => {
-    const nextIdx = groups.length + 1;
-    setGroups((prev) => [
-      ...prev,
-      { id: `group-${nextIdx}`, name: `그룹 ${nextIdx}`, items: [] },
-    ]);
+  const handleAddGroup = () => {
+    setGroups((prev) => addGroup(prev));
+  };
+
+  const handleDeleteGroup = (groupId) => {
+    if (!confirm("정말 이 그룹을 삭제할까요?")) return;
+    setGroups((prev) => deleteGroup(prev, groupId));
+    if (editingGroupId === groupId) {
+      setEditingGroupId(null);
+      setEditingName("");
+    }
+  };
+
+  const startEditGroupName = (group) => {
+    setEditingGroupId(group.id);
+    setEditingName(group.name);
+  };
+
+  const saveGroupName = () => {
+    const name = editingName.trim();
+    if (!name) {
+      alert("그룹명을 입력해주세요.");
+      return;
+    }
+    setGroups((prev) => updateGroupName(prev, editingGroupId, name));
+    setEditingGroupId(null);
+    setEditingName("");
+  };
+
+  const cancelEditGroupName = () => {
+    setEditingGroupId(null);
+    setEditingName("");
   };
 
   const handleViewResult = (group) => {
@@ -168,7 +195,7 @@ export default function Dashboard() {
   };
 
   const handleRemoveFromGroup = (groupId, stockId) => {
-    setGroups((prev) => removeFromGroupUtil(prev, groupId, stockId));
+    setGroups((prev) => removeFromGroup(prev, groupId, stockId));
   };
 
   return (
@@ -177,7 +204,7 @@ export default function Dashboard() {
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl font-bold">대시보드</h2>
         <button
-          onClick={addGroup}
+          onClick={handleAddGroup}
           className="px-3 py-1.5 text-sm rounded-md bg-gray-800 text-white hover:bg-black"
         >
           그룹 추가
@@ -190,7 +217,7 @@ export default function Dashboard() {
         onDragEnd={onDragEnd}
       >
         <div className="grid grid-cols-12 gap-4">
-          {/* 좌: 검색 + 장바구니(소스 전용) */}
+          {/* 좌: 검색 + 장바구니 */}
           <div className="col-span-4">
             <div className="mb-3">
               <input
@@ -211,7 +238,7 @@ export default function Dashboard() {
                 basketList.map((item) => (
                   <DraggableStock
                     key={`${showSearch ? "search" : "cart"}-${item.id}`}
-                    draggableId={`${showSearch ? "search" : "cart"}:${item.id}`} // ✅ 출발지 prefix 부여
+                    draggableId={`${showSearch ? "search" : "cart"}:${item.id}`}
                     item={item}
                     removable={false}
                   />
@@ -220,41 +247,91 @@ export default function Dashboard() {
             </BasketPanel>
           </div>
 
-          {/* 우: 그룹들(드롭 가능 + 항목 삭제 가능) */}
+          {/* 우: 그룹들 */}
           <div className="col-span-8 flex flex-col gap-4">
-            {groups.map((g) => (
-              <DroppableGroup
-                key={g.id}
-                id={g.id}
-                title={g.name}
-                headerRight={
-                  <button
-                    onClick={() => handleViewResult(g)}
-                    className="px-2 py-1 text-xs rounded-md bg-indigo-600 text-white hover:bg-indigo-700"
-                  >
-                    결과 보기
-                  </button>
-                }
-              >
-                {g.items.length === 0 ? (
-                  <div className="text-sm text-gray-500">
-                    이 그룹에 종목을 드래그해서 담아주세요
+            {groups.map((g) => {
+              const isEditing = editingGroupId === g.id;
+              const header = (
+                <div className="flex items-center justify-between px-4 py-2 border-b bg-white rounded-t-xl">
+                  {/* 이름 / 편집 */}
+                  <div className="flex items-center gap-2">
+                    {isEditing ? (
+                      <>
+                        <input
+                          value={editingName}
+                          onChange={(e) => setEditingName(e.target.value)}
+                          className="border rounded px-2 py-1 text-sm"
+                          placeholder="그룹 이름"
+                          autoFocus
+                        />
+                        <button
+                          onClick={saveGroupName}
+                          className="px-2 py-1 text-xs rounded bg-indigo-600 text-white hover:bg-indigo-700"
+                        >
+                          저장
+                        </button>
+                        <button
+                          onClick={cancelEditGroupName}
+                          className="px-2 py-1 text-xs rounded bg-gray-200 hover:bg-gray-300"
+                        >
+                          취소
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <h3 className="font-semibold">{g.name}</h3>
+                        <button
+                          onClick={() => startEditGroupName(g)}
+                          className="px-2 py-1 text-xs rounded bg-gray-200 hover:bg-gray-300"
+                          title="이름 변경"
+                        >
+                          이름 변경
+                        </button>
+                      </>
+                    )}
                   </div>
-                ) : (
-                  <div className="grid grid-cols-2 gap-2">
-                    {g.items.map((item) => (
-                      <DraggableStock
-                        key={`${g.id}-${item.id}`}
-                        draggableId={`${g.id}:${item.id}`} // ✅ 그룹 prefix 부여
-                        item={item}
-                        removable
-                        onRemove={() => handleRemoveFromGroup(g.id, item.id)}
-                      />
-                    ))}
+
+                  {/* 오른쪽 버튼 */}
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleViewResult(g)}
+                      className="px-2 py-1 text-xs rounded-md bg-indigo-600 text-white hover:bg-indigo-700"
+                    >
+                      결과 보기
+                    </button>
+                    <button
+                      onClick={() => handleDeleteGroup(g.id)}
+                      className="px-2 py-1 text-xs rounded-md bg-red-600 text-white hover:bg-red-700"
+                      title="그룹 삭제"
+                    >
+                      삭제
+                    </button>
                   </div>
-                )}
-              </DroppableGroup>
-            ))}
+                </div>
+              );
+
+              return (
+                <DroppableGroup key={g.id} id={g.id} header={header}>
+                  {g.items.length === 0 ? (
+                    <div className="text-sm text-gray-500">
+                      이 그룹에 종목을 드래그해서 담아주세요
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2">
+                      {g.items.map((item) => (
+                        <DraggableStock
+                          key={`${g.id}-${item.id}`}
+                          draggableId={`${g.id}:${item.id}`}
+                          item={item}
+                          removable
+                          onRemove={() => handleRemoveFromGroup(g.id, item.id)}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </DroppableGroup>
+              );
+            })}
           </div>
         </div>
 
