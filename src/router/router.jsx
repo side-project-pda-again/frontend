@@ -16,7 +16,7 @@ export const router = createBrowserRouter([
         element: <ProtectedRoute />, // 보호 라우트 래퍼
         children: [{ path: "/dashboard", element: <DashboardPage /> }],
       },
+      { path: "*", element: <LoginPage /> },
     ],
   },
-  { path: "*", element: <LoginPage /> },
 ]);
