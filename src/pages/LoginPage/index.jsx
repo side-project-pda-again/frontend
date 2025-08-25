@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { useAuth } from "../../store/AuthContext";
+import { useAuth } from "../../context/AuthContext";
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -20,7 +20,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-50">
+    <div className="flex items-center justify-center flex-grow w-full bg-gray-50">
       <div className="w-full max-w-md bg-white shadow-lg rounded-2xl p-8">
         <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">
           로그인

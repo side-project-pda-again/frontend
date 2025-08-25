@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { useAuth } from "../../store/AuthContext";
+import { useAuth } from "../../context/AuthContext";
 
 export default function RegisterPage() {
   const { signup } = useAuth();
