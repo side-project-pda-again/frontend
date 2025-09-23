@@ -1,11 +1,21 @@
-export function BasketPanel({ title, hint, children }) {
+export function BasketPanel({ title, children }) {
   return (
-    <div className="flex flex-col bg-gray-50 rounded-xl border border-gray-200">
-      <div className="flex items-center justify-between px-4 py-2 border-b bg-white rounded-t-xl">
+    <div className="bg-gray-50">
+      <div className="mb-2 mt-2 px-4 flex items-end justify-between">
         <h3 className="font-semibold">{title}</h3>
-        {hint && <span className="text-xs text-gray-500">{hint}</span>}
+        <span className="text-xs text-gray-500">
+          드래그해서 그룹에 담아보세요
+        </span>
       </div>
-      <div className="p-3 flex flex-col gap-2">{children}</div>
+
+      <div className="flex flex-col">
+        <div
+          className="p-4 flex flex-col gap-2 overflow-y-auto overscroll-contain"
+          style={{ height: "70vh" }}
+        >
+          {children}
+        </div>
+      </div>
     </div>
   );
 }

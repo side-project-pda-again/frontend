@@ -31,8 +31,7 @@ export default function SortControls({ sort, onChange }) {
   const handleDir = (e) => onChange(`${field},${e.target.value}`);
 
   return (
-    <div className="flex items-center gap-2 mb-3">
-      <label className="text-sm text-gray-600">정렬</label>
+    <div className="flex items-center justify-end gap-2">
       <select
         value={field}
         onChange={handleField}

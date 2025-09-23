@@ -107,14 +107,20 @@ export default function Dashboard() {
   return (
     <div className="w-full">
       {/* 상단 */}
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-bold">대시보드</h2>
-        <button
-          onClick={handleAddGroup}
-          className="px-3 py-1.5 text-sm rounded-md bg-gray-800 text-white hover:bg-black"
-        >
-          그룹 추가
-        </button>
+      <div className="mb-4">
+        <h2 className="text-4xl font-bold mb-4">대시보드</h2>
+        <div className="flex items-end justify-between">
+          <h4 className="text-lg font-semibold">
+            서비스 간략 설명(ex. 종목을 그룹에 추가하고 예상 배당+수익을
+            확인해보세요)
+          </h4>
+          <button
+            onClick={handleAddGroup}
+            className="px-3 py-1.5 text-sm rounded-md bg-gray-800 text-white hover:bg-black"
+          >
+            그룹 추가
+          </button>
+        </div>
       </div>
 
       <DndContext
@@ -125,42 +131,45 @@ export default function Dashboard() {
         <div className="grid grid-cols-12 gap-12">
           {/* 좌: 검색 + 장바구니 */}
           <div className="col-span-4">
-            <div className="mb-3">
-              <input
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="종목 검색 (심볼/이름)"
-                className="w-full border rounded-lg px-3 py-2"
-              />
-            </div>
-
-            <SortControls sort={sort} onChange={setSort} />
-
-            <BasketPanel
-              title={showSearch ? "검색 결과" : "장바구니"}
-              hint={!showSearch ? "드래그해서 그룹에 담기" : undefined}
-            >
-              {showSearch && loading && (
-                <div className="text-sm text-gray-500">검색 중…</div>
-              )}
-              {showSearch && error && (
-                <div className="text-sm text-red-600">
-                  검색 실패: {error.message}
-                </div>
-              )}
-              {basketList.length === 0 ? (
-                <div className="text-sm text-gray-500">비어있습니다.</div>
-              ) : (
-                basketList.map((item) => (
-                  <DraggableStock
-                    key={`${showSearch ? "search" : "cart"}-${item.id}`}
-                    draggableId={`${showSearch ? "search" : "cart"}:${item.id}`}
-                    item={item}
-                    removable={false}
+            <div className="flex flex-col bg-gray-0 rounded-xl border border-gray-200">
+              <div className="p-4">
+                <div className="mb-3">
+                  <input
+                    value={q}
+                    onChange={(e) => setQ(e.target.value)}
+                    placeholder="종목 검색 (심볼/이름)"
+                    className="w-full border rounded-lg px-3 py-2"
                   />
-                ))
-              )}
-            </BasketPanel>
+                </div>
+                <SortControls sort={sort} onChange={setSort} />
+              </div>
+
+              <div className=" border-b" />
+              <BasketPanel title={showSearch ? "검색 결과" : "장바구니"}>
+                {showSearch && loading && (
+                  <div className="text-sm text-gray-500">검색 중…</div>
+                )}
+                {showSearch && error && (
+                  <div className="text-sm text-red-600">
+                    검색 실패: {error.message}
+                  </div>
+                )}
+                {basketList.length === 0 ? (
+                  <div className="text-sm text-gray-500">비어있습니다.</div>
+                ) : (
+                  basketList.map((item) => (
+                    <DraggableStock
+                      key={`${showSearch ? "search" : "cart"}-${item.id}`}
+                      draggableId={`${showSearch ? "search" : "cart"}:${
+                        item.id
+                      }`}
+                      item={item}
+                      removable={false}
+                    />
+                  ))
+                )}
+              </BasketPanel>
+            </div>
           </div>
 
           {/* 우: 그룹들 */}
