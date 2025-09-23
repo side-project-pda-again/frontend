@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { etfApi } from "../api/etfApi";
 
 export default function useDebouncedEtfSearch({
-  size = 5,
-  sort = "ticker,asc",
+  size = 20,
+  sort,
   debounceMs = 250,
 } = {}) {
   const [q, setQ] = useState("");
@@ -14,7 +14,6 @@ export default function useDebouncedEtfSearch({
     page: 0,
     size,
     total: 0,
-    sort,
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -53,13 +52,12 @@ export default function useDebouncedEtfSearch({
           query,
           page: 0,
           size: searchMeta.size,
-          sort: searchMeta.sort,
+          sort,
         };
         const res = await etfApi.fetchEtf(params, {
           signal: controller.signal,
         });
 
-        // 서버 래퍼: { success, data: { content, page, ... } }
         const data = res?.data?.data ?? res?.data ?? {};
         const rows = (data?.content ?? []).map((x) => ({ ...x, id: x.ticker }));
 
@@ -68,10 +66,8 @@ export default function useDebouncedEtfSearch({
           page: data?.page ?? 0,
           size: data?.size ?? params.size,
           total: data?.totalElements ?? rows.length,
-          sort: data?.sort ?? params.sort,
         });
       } catch (e) {
-        // 사용자가 입력을 계속하면 취소가 정상
         if (e.name !== "CanceledError" && e.message !== "canceled") setError(e);
       } finally {
         setLoading(false);
@@ -81,12 +77,10 @@ export default function useDebouncedEtfSearch({
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [q, searchMeta.size, searchMeta.sort, debounceMs]);
+  }, [q, searchMeta.size, sort, debounceMs]);
 
   // 페이지/정렬 변경 헬퍼
   const setPage = (page) => setSearchMeta((p) => ({ ...p, page }));
-  const setSort = (nextSort) =>
-    setSearchMeta((p) => ({ ...p, sort: nextSort }));
 
   return {
     q,
@@ -95,7 +89,6 @@ export default function useDebouncedEtfSearch({
     searchResult,
     searchMeta,
     setPage,
-    setSort,
     loading,
     error,
   };

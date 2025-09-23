@@ -6,7 +6,7 @@ export const etfApi = {
    */
   fetchEtf: (params, { signal } = {}) =>
     api.get("/etfs", {
-      params: cleanParams({ params }),
+      params: cleanParams(params),
       signal,
     }),
 

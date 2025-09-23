@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { DndContext, DragOverlay, closestCenter } from "@dnd-kit/core";
 import { cartStocks } from "./dummyData";
 import {
@@ -12,6 +12,7 @@ import { StockCard, DraggableStock } from "./components/StockCard";
 import { BasketPanel } from "./components/BasketPanel";
 import { DroppableGroup } from "./components/DroppableGroup";
 import useDebouncedEtfSearch from "../../hooks/userDebouncedEtfSearch";
+import SortControls from "../../components/SortControls";
 
 export default function Dashboard() {
   const [cart] = useState(cartStocks.map((x) => ({ ...x, id: x.ticker })));
@@ -23,17 +24,9 @@ export default function Dashboard() {
   const [editingName, setEditingName] = useState("");
 
   /* 검색 상태 */
-  const {
-    q,
-    setQ,
-    showSearch,
-    searchResult,
-    searchMeta,
-    setSort,
-    loading,
-    error,
-  } = useDebouncedEtfSearch({ size: 5, sort: "ticker,asc", debounceMs: 250 });
-
+  const [sort, setSort] = useState("ticker,asc");
+  const { q, setQ, showSearch, searchResult, searchMeta, loading, error } =
+    useDebouncedEtfSearch({ size: 5, sort, debounceMs: 250 });
   const basketList = showSearch ? searchResult : cart;
   /* 드래그 미리보기 */
   const [activeItem, setActiveItem] = useState(null);
@@ -140,6 +133,8 @@ export default function Dashboard() {
                 className="w-full border rounded-lg px-3 py-2"
               />
             </div>
+
+            <SortControls sort={sort} onChange={setSort} />
 
             <BasketPanel
               title={showSearch ? "검색 결과" : "장바구니"}
