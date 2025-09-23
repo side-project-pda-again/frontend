@@ -1,13 +1,6 @@
-import { useMemo, useState } from "react";
-import {
-  DndContext,
-  useDraggable,
-  useDroppable,
-  DragOverlay,
-  closestCenter,
-} from "@dnd-kit/core";
-import { CSS } from "@dnd-kit/utilities";
-import { cartStocks, allStocks as allStocksData } from "./dummyData";
+import { useState } from "react";
+import { DndContext, DragOverlay, closestCenter } from "@dnd-kit/core";
+import { cartStocks } from "./dummyData";
 import {
   addToGroup,
   removeFromGroup,
@@ -15,113 +8,33 @@ import {
   deleteGroup,
   updateGroupName,
 } from "../../utils/dashboardUtils";
-
-/* ===== 종목 카드 ===== */
-function StockCard({ symbol, name, dragging }) {
-  return (
-    <div
-      className={`border rounded-lg px-3 py-2 text-sm bg-white ${
-        dragging ? "opacity-70 ring-2 ring-indigo-400" : ""
-      }`}
-    >
-      <div className="font-semibold">{symbol}</div>
-      <div className="text-gray-500">{name}</div>
-    </div>
-  );
-}
-
-/* ===== 드래그 가능한 종목 ===== */
-function DraggableStock({ item, draggableId, removable, onRemove }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } =
-    useDraggable({ id: draggableId, data: { type: "stock", item } });
-
-  const style = { transform: CSS.Translate.toString(transform) };
-
-  return (
-    <div ref={setNodeRef} style={style} className="relative">
-      {/* 드래그 핸들은 카드 본문에만 부착 */}
-      <div {...listeners} {...attributes}>
-        <StockCard {...item} dragging={isDragging} />
-      </div>
-
-      {/* 그룹 내 삭제 버튼 */}
-      {removable && (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            e.preventDefault();
-            onRemove?.(item);
-          }}
-          className="absolute top-1 right-1 inline-flex items-center justify-center
-                     w-6 h-6 rounded-full bg-gray-200 text-gray-700 hover:bg-red-500 hover:text-white
-                     text-xs"
-          aria-label={`${item.symbol} 삭제`}
-          title="삭제"
-        >
-          ✕
-        </button>
-      )}
-    </div>
-  );
-}
-
-/* ===== 그룹(드롭 가능) ===== */
-function DroppableGroup({ id, header, children }) {
-  const { setNodeRef, isOver } = useDroppable({ id, data: { type: "group" } });
-  return (
-    <div
-      ref={setNodeRef}
-      className={`flex flex-col bg-gray-50 rounded-xl border ${
-        isOver ? "border-indigo-400" : "border-gray-200"
-      }`}
-    >
-      {header}
-      <div className="p-3 flex flex-col gap-2">{children}</div>
-    </div>
-  );
-}
-
-/* ===== 장바구니/검색 패널 ===== */
-function BasketPanel({ title, hint, children }) {
-  return (
-    <div className="flex flex-col bg-gray-50 rounded-xl border border-gray-200">
-      <div className="flex items-center justify-between px-4 py-2 border-b bg-white rounded-t-xl">
-        <h3 className="font-semibold">{title}</h3>
-        {hint && <span className="text-xs text-gray-500">{hint}</span>}
-      </div>
-      <div className="p-3 flex flex-col gap-2">{children}</div>
-    </div>
-  );
-}
+import { StockCard, DraggableStock } from "./components/StockCard";
+import { BasketPanel } from "./components/BasketPanel";
+import { DroppableGroup } from "./components/DroppableGroup";
+import useDebouncedEtfSearch from "../../hooks/userDebouncedEtfSearch";
 
 export default function Dashboard() {
-  /* 소스 데이터 */
-  const [cart] = useState(cartStocks);
-  const [allStocks] = useState(allStocksData);
-
-  /* 그룹 상태 */
+  const [cart] = useState(cartStocks.map((x) => ({ ...x, id: x.ticker })));
   const [groups, setGroups] = useState([
-    { id: "group-1", name: "그룹 1", items: [] },
-    { id: "group-2", name: "그룹 2", items: [] },
+    { id: "1", name: "그룹 1", items: [] },
+    { id: "2", name: "그룹 2", items: [] },
   ]);
-
-  /* 그룹명 편집 상태 */
   const [editingGroupId, setEditingGroupId] = useState(null);
   const [editingName, setEditingName] = useState("");
 
-  /* 검색 */
-  const [q, setQ] = useState("");
-  const showSearch = q.trim().length > 0;
-  const basketList = useMemo(() => {
-    if (!showSearch) return cart;
-    const kw = q.trim().toLowerCase();
-    return allStocks.filter(
-      (s) =>
-        s.symbol.toLowerCase().includes(kw) || s.name.toLowerCase().includes(kw)
-    );
-  }, [showSearch, q, cart, allStocks]);
+  /* 검색 상태 */
+  const {
+    q,
+    setQ,
+    showSearch,
+    searchResult,
+    searchMeta,
+    setSort,
+    loading,
+    error,
+  } = useDebouncedEtfSearch({ size: 5, sort: "ticker,asc", debounceMs: 250 });
 
+  const basketList = showSearch ? searchResult : cart;
   /* 드래그 미리보기 */
   const [activeItem, setActiveItem] = useState(null);
 
@@ -216,7 +129,7 @@ export default function Dashboard() {
         onDragStart={onDragStart}
         onDragEnd={onDragEnd}
       >
-        <div className="grid grid-cols-12 gap-4">
+        <div className="grid grid-cols-12 gap-12">
           {/* 좌: 검색 + 장바구니 */}
           <div className="col-span-4">
             <div className="mb-3">
@@ -232,6 +145,14 @@ export default function Dashboard() {
               title={showSearch ? "검색 결과" : "장바구니"}
               hint={!showSearch ? "드래그해서 그룹에 담기" : undefined}
             >
+              {showSearch && loading && (
+                <div className="text-sm text-gray-500">검색 중…</div>
+              )}
+              {showSearch && error && (
+                <div className="text-sm text-red-600">
+                  검색 실패: {error.message}
+                </div>
+              )}
               {basketList.length === 0 ? (
                 <div className="text-sm text-gray-500">비어있습니다.</div>
               ) : (
@@ -336,7 +257,7 @@ export default function Dashboard() {
         </div>
 
         <DragOverlay>
-          {activeItem ? <StockCard {...activeItem} dragging /> : null}
+          {activeItem ? <StockCard item={activeItem} dragging /> : null}
         </DragOverlay>
       </DndContext>
     </div>
