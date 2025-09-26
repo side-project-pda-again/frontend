@@ -1,3 +1,4 @@
+/** 순수 리듀서 */
 // 종목이 그룹에 이미 있는지 확인
 export const isInGroup = (group, stock) =>
   group.items.some((i) => i.id === stock.id);

@@ -1,3 +1,4 @@
+/* eslint-disable react/prop-types */
 const SORT_FIELDS = [
   { value: "ticker", label: "종목코드" },
   { value: "krIsnm", label: "종목명" },

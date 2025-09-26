@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { DndContext, DragOverlay, closestCenter } from "@dnd-kit/core";
 import {
   addToGroup,
@@ -15,6 +15,8 @@ import SortControls from "@components/SortControls";
 import { useLikeStore } from "@stores/likeStore";
 import { useUserStore } from "@stores/userStore";
 import { etfApi } from "@api/etfApi";
+import { createGroupActions } from "@utils/dashboardApiUtils";
+import { portfolioApi } from "../../api/portfolioApi";
 
 const useLikeSync = () => {
   const hydrateFromRows = useLikeStore((s) => s.hydrateFromRows);
@@ -25,9 +27,22 @@ const useLikeSync = () => {
 export default function Dashboard() {
   const [cart, setCart] = useState([]);
   const [groups, setGroups] = useState([
-    { id: "1", name: "그룹 1", items: [] },
-    { id: "2", name: "그룹 2", items: [] },
+    { id: "1", portfolioId: 1, name: "그룹 1", items: [] },
+    { id: "2", portfolioId: 2, name: "그룹 2", items: [] },
   ]);
+  const groupsRef = useRef(groups);
+  useEffect(() => {
+    groupsRef.current = groups;
+  }, [groups]);
+  const mgr = useMemo(
+    () =>
+      createGroupActions({
+        api: portfolioApi,
+        getGroups: () => groupsRef.current,
+        setGroups,
+      }),
+    []
+  );
   const [editingGroupId, setEditingGroupId] = useState(null);
   const [editingName, setEditingName] = useState("");
 
@@ -45,31 +60,33 @@ export default function Dashboard() {
     setActiveItem(it || null);
   };
 
-  const onDragEnd = (e) => {
-    const { active, over } = e;
-    setActiveItem(null);
-    if (!over) return;
+  // const onDragEnd = (e) => {
+  //   const { active, over } = e;
+  //   setActiveItem(null);
+  //   if (!over) return;
 
-    const item = active.data.current?.item;
-    if (!item) return;
+  //   const item = active.data.current?.item;
+  //   if (!item) return;
 
-    const toId = over.id;
-    const [fromContainer] = String(active.id).split(":");
-    const isCopy = fromContainer === "cart" || fromContainer === "search";
-    const fromId = isCopy ? null : fromContainer;
+  //   const toId = over.id;
+  //   const [fromContainer] = String(active.id).split(":");
+  //   const isCopy = fromContainer === "cart" || fromContainer === "search";
+  //   const fromId = isCopy ? null : fromContainer;
 
-    if (!toId || fromId === toId) return;
+  //   if (!toId || fromId === toId) return;
 
-    setGroups((prev) => {
-      let updated = prev;
-      if (!isCopy && fromId) {
-        updated = removeFromGroup(updated, fromId, item.id);
-      }
-      return addToGroup(updated, toId, item);
-    });
-  };
+  //   setGroups((prev) => {
+  //     let updated = prev;
+  //     if (!isCopy && fromId) {
+  //       updated = removeFromGroup(updated, fromId, item.id);
+  //     }
+  //     return addToGroup(updated, toId, item);
+  //   });
+  // };
 
-  //좋아요 조회 관리
+  /**
+   * 좋아요 조회 관리
+   **/
   const userId = useUserStore((s) => s.user?.id);
   const { hydrateFromRows, reconcileRows } = useLikeSync();
   const likeVersion = useLikeStore((s) => s.version);
@@ -122,6 +139,45 @@ export default function Dashboard() {
     };
   }, [userId, likeVersion, hydrateFromRows, reconcileRows]);
 
+  // 마운트/로그인 변경 시 조회
+  useEffect(() => {
+    const controller = new AbortController();
+    mgr.hydrateAll({ signal: controller.signal });
+    return () => controller.abort();
+  }, [userId]);
+
+  // DnD 끝났을 때
+  const onDragEnd = (e) => {
+    const { active, over } = e;
+    if (!over) return;
+    const item = active.data.current?.item;
+    if (!item) return;
+
+    const toId = over.id;
+    const [fromBucket] = String(active.id).split(":");
+    const isCopy = fromBucket === "cart" || fromBucket === "search";
+    const fromId = isCopy ? null : fromBucket;
+
+    if (!toId || fromId === toId) return;
+
+    if (!fromId) {
+      // 장바구니/검색 → 그룹 (복사/추가)
+      mgr.add({ toGroupId: toId, stock: item });
+    } else {
+      // 그룹 ↔ 그룹 이동
+      mgr.move({ fromGroupId: fromId, toGroupId: toId, stock: item });
+    }
+  };
+
+  // 그룹 내부 삭제 버튼
+  const handleRemoveFromGroup = (groupId, stockId) => {
+    const stock = groups
+      .find((g) => g.id === groupId)
+      ?.items.find((i) => i.id === stockId);
+    if (!stock) return;
+    mgr.remove({ fromGroupId: groupId, stock });
+  };
+
   /* 그룹 조작 */
   const handleAddGroup = () => {
     setGroups((prev) => addGroup(prev));
@@ -159,10 +215,6 @@ export default function Dashboard() {
 
   const handleViewResult = (group) => {
     alert(`${group.name} 결과 보기 (종목 ${group.items.length}개)`);
-  };
-
-  const handleRemoveFromGroup = (groupId, stockId) => {
-    setGroups((prev) => removeFromGroup(prev, groupId, stockId));
   };
 
   return (

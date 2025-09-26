@@ -5,9 +5,8 @@ export const portfolioApi = {
    * 포트폴리오 내 종목 조회
    * TODO: userId 전달 방식 수정
    */
-  fetchEtfInPortfolio: ({ portfolioId, userId } = {}) =>
+  fetchEtfInPortfolio: ({ portfolioId } = {}) =>
     api.get(`/portfolio/${portfolioId}/items`, {
-      params: cleanParams({ userId }),
       isAuth: true,
     }),
 
@@ -15,9 +14,9 @@ export const portfolioApi = {
    * 포트폴리오 내 종목 추가
    * TODO: userId 전달 방식 수정
    */
-  addEtfInPortfolio: ({ ticker, userId, portfolioId }) =>
+  addEtfInPortfolio: ({ ticker, portfolioId }) =>
     api.post(`/portfolio/${portfolioId}/items`, null, {
-      params: cleanParams({ userId, ticker }),
+      params: cleanParams({ ticker }),
       isAuth: true,
     }),
 
@@ -25,9 +24,9 @@ export const portfolioApi = {
    * 포트폴리오 내 종목 삭제
    * TODO: userId 전달 방식 수정
    */
-  removeEtfInPortfolio: ({ ticker, userId, portfolioId }) =>
+  removeEtfInPortfolio: ({ ticker, portfolioId }) =>
     api.delete(`/portfolio/${portfolioId}/items`, {
-      params: cleanParams({ userId, ticker }),
+      params: cleanParams({ ticker }),
       isAuth: true,
     }),
 };
