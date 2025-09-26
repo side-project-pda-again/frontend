@@ -1,4 +1,5 @@
 import axios from "axios";
+import { useUserStore } from "@stores/userStore";
 
 const api = axios.create({
   baseURL: "/api",
@@ -7,6 +8,13 @@ const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
+  const userId = useUserStore.getState().user?.id;
+  if (config.isAuth && userId != null) {
+    config.params = {
+      ...(config.params || {}),
+      userId,
+    };
+  }
   return config;
 });
 

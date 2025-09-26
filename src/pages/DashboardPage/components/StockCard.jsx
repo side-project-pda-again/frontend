@@ -1,13 +1,9 @@
 /* eslint-disable react/prop-types */
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
+import EtfLikeButton from "@components/EtfLikeButton";
 
-/* ===== 종목 카드 ===== */
-export function StockCard({
-  item,
-  dragging = false,
-  onToggleLike = null, // 옵션
-}) {
+export function StockCard({ item, dragging = false }) {
   const {
     ticker,
     krIsnm,
@@ -20,10 +16,9 @@ export function StockCard({
     volume,
     latestDividendDate,
     latestDividendAmount,
-    liked,
+    liked, // 서버가 준 초기값
   } = item ?? {};
 
-  // ---- formatters ----
   const fmtMoney = (n) =>
     n == null
       ? "-"
@@ -76,26 +71,11 @@ export function StockCard({
         </div>
 
         {/* 우측 상단: 즐겨찾기 */}
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleLike?.(item);
-          }}
-          title={liked ? "즐겨찾기 해제" : "즐겨찾기"}
-          className="shrink-0 rounded-full p-1 hover:bg-gray-100"
-        >
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill={liked ? "gold" : "none"}
-            stroke={liked ? "goldenrod" : "currentColor"}
-            strokeWidth="2"
-          >
-            <path d="M12 .587l3.668 7.431 8.2 1.192-5.934 5.787 1.401 8.168L12 18.896l-7.335 3.869 1.401-8.168L.132 9.21l8.2-1.192z" />
-          </svg>
-        </button>
+        <EtfLikeButton
+          ticker={ticker}
+          initialLiked={liked ?? false}
+          onAuthRequired={() => alert("로그인이 필요합니다.")}
+        />
       </div>
 
       {/* 가격/변동 */}

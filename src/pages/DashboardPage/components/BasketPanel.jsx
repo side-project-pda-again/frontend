@@ -1,3 +1,4 @@
+/* eslint-disable react/prop-types */
 export function BasketPanel({ title, children }) {
   return (
     <div className="bg-gray-50">

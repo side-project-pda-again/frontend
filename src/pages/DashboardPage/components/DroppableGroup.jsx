@@ -1,6 +1,6 @@
+/* eslint-disable react/prop-types */
 import { useDroppable } from "@dnd-kit/core";
 
-/* ===== 그룹(드롭 가능) ===== */
 export function DroppableGroup({ id, header, children }) {
   const { setNodeRef, isOver } = useDroppable({ id, data: { type: "group" } });
   return (

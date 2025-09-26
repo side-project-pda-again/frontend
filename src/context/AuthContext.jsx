@@ -1,3 +1,4 @@
+/* eslint-disable react/prop-types */
 /**
  * 로그인 및 회원가입 임시 저장소
  */

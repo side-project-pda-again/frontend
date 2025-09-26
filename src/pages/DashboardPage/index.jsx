@@ -1,21 +1,29 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { DndContext, DragOverlay, closestCenter } from "@dnd-kit/core";
-import { cartStocks } from "./dummyData";
 import {
   addToGroup,
   removeFromGroup,
   addGroup,
   deleteGroup,
   updateGroupName,
-} from "../../utils/dashboardUtils";
+} from "@utils/dashboardUtils";
 import { StockCard, DraggableStock } from "./components/StockCard";
 import { BasketPanel } from "./components/BasketPanel";
 import { DroppableGroup } from "./components/DroppableGroup";
-import useDebouncedEtfSearch from "../../hooks/userDebouncedEtfSearch";
-import SortControls from "../../components/SortControls";
+import useDebouncedEtfSearch from "@hooks/userDebouncedEtfSearch";
+import SortControls from "@components/SortControls";
+import { useLikeStore } from "@stores/likeStore";
+import { useUserStore } from "@stores/userStore";
+import { etfApi } from "@api/etfApi";
+
+const useLikeSync = () => {
+  const hydrateFromRows = useLikeStore((s) => s.hydrateFromRows);
+  const reconcileRows = useLikeStore((s) => s.reconcileRows);
+  return { hydrateFromRows, reconcileRows };
+};
 
 export default function Dashboard() {
-  const [cart] = useState(cartStocks.map((x) => ({ ...x, id: x.ticker })));
+  const [cart, setCart] = useState([]);
   const [groups, setGroups] = useState([
     { id: "1", name: "그룹 1", items: [] },
     { id: "2", name: "그룹 2", items: [] },
@@ -25,7 +33,7 @@ export default function Dashboard() {
 
   /* 검색 상태 */
   const [sort, setSort] = useState("ticker,asc");
-  const { q, setQ, showSearch, searchResult, searchMeta, loading, error } =
+  const { q, setQ, showSearch, searchResult, loading, error } =
     useDebouncedEtfSearch({ size: 5, sort, debounceMs: 250 });
   const basketList = showSearch ? searchResult : cart;
   /* 드래그 미리보기 */
@@ -60,6 +68,59 @@ export default function Dashboard() {
       return addToGroup(updated, toId, item);
     });
   };
+
+  //좋아요 조회 관리
+  const userId = useUserStore((s) => s.user?.id);
+  const { hydrateFromRows, reconcileRows } = useLikeSync();
+  const likeVersion = useLikeStore((s) => s.version);
+  const abortRef = useRef(null);
+  const timerRef = useRef(null);
+
+  const REFRESH_DELAY_MS = 500;
+
+  useEffect(() => {
+    // 직전 타이머/요청 정리
+    if (timerRef.current) clearTimeout(timerRef.current);
+    abortRef.current?.abort?.();
+
+    // 디바운스 타이머 시작
+    timerRef.current = setTimeout(() => {
+      const controller = new AbortController();
+      abortRef.current = controller;
+
+      (async () => {
+        try {
+          const res = await etfApi.fetchLikeEtf(
+            { page: 0, size: 50, _ts: Date.now() },
+            {
+              isAuth: true,
+              signal: controller.signal,
+              headers: { "Cache-Control": "no-cache" },
+            }
+          );
+          const data = res?.data?.data ?? res?.data ?? {};
+          const rowsRaw = (data.items ?? data.content ?? []).map((x) => ({
+            ...x,
+            id: x.id ?? x.ticker,
+            ticker: x.ticker,
+          }));
+
+          hydrateFromRows(rowsRaw);
+          const rows = reconcileRows(rowsRaw);
+          setCart(rows);
+        } catch (e) {
+          if (e?.name === "AbortError" || e?.name === "CanceledError") return;
+          console.error("즐겨찾기 로드 실패:", e);
+          setCart([]);
+        }
+      })();
+    }, REFRESH_DELAY_MS);
+
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      abortRef.current?.abort?.();
+    };
+  }, [userId, likeVersion, hydrateFromRows, reconcileRows]);
 
   /* 그룹 조작 */
   const handleAddGroup = () => {
