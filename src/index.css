@@ -1,1 +1,39 @@
 @import "tailwindcss";
+@tailwind utilities;
+
+:root {
+  /* Font */
+  --font-sans: "Nanum Gothic";
+
+  /* Font sizes (REM) */
+  --fs-xs: 0.75rem; /* 12px */
+  --fs-sm: 0.875rem; /* 14px */
+  --fs-base: 1rem; /* 16px */
+  --fs-lg: 1.125rem; /* 18px */
+  --fs-xl: 1.25rem; /* 20px */
+  --fs-2xl: 1.5rem; /* 24px */
+  --fs-3xl: 1.875rem; /* 30px */
+  --fs-4xl: 2.25rem; /* 36px */
+
+  /* Color palette (light) */
+  --c-gray-0: #ffffff;
+  --c-surface: #fafafa;
+  --c-border: #e5e7eb; /* gray-200 */
+  --c-text: #111827; /* gray-900 */
+  --c-text-muted: #6b7280; /* gray-500 */
+
+  --c-primary: #4f46e5; /* indigo-600 */
+  --c-primary-ink: #ffffff;
+
+  --c-success: #059669; /* emerald-600 */
+  --c-danger: #dc2626; /* red-600 */
+  --c-warning: #d97706; /* amber-600 */
+
+  /* Radii / spacing */
+  --r-card: 0.75rem; /* 12px */
+  --r-button: 0.5rem; /* 8px */
+  --sp-card: 1rem; /* 16px */
+
+  /* Shadows */
+  --sh-card: 0 1px 2px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.1);
+}
