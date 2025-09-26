@@ -1,127 +1,56 @@
-import { useMemo, useState } from "react";
-import {
-  DndContext,
-  useDraggable,
-  useDroppable,
-  DragOverlay,
-  closestCenter,
-} from "@dnd-kit/core";
-import { CSS } from "@dnd-kit/utilities";
-import { cartStocks, allStocks as allStocksData } from "./dummyData";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { DndContext, DragOverlay, closestCenter } from "@dnd-kit/core";
 import {
   addToGroup,
   removeFromGroup,
   addGroup,
   deleteGroup,
   updateGroupName,
-} from "../../utils/dashboardUtils";
+} from "@utils/dashboardUtils";
+import { StockCard, DraggableStock } from "./components/StockCard";
+import { BasketPanel } from "./components/BasketPanel";
+import { DroppableGroup } from "./components/DroppableGroup";
+import useDebouncedEtfSearch from "@hooks/userDebouncedEtfSearch";
+import SortControls from "@components/SortControls";
+import { useLikeStore } from "@stores/likeStore";
+import { useUserStore } from "@stores/userStore";
+import { etfApi } from "@api/etfApi";
+import { createGroupActions } from "@utils/dashboardApiUtils";
+import { portfolioApi } from "../../api/portfolioApi";
 
-/* ===== 종목 카드 ===== */
-function StockCard({ symbol, name, dragging }) {
-  return (
-    <div
-      className={`border rounded-lg px-3 py-2 text-sm bg-white ${
-        dragging ? "opacity-70 ring-2 ring-indigo-400" : ""
-      }`}
-    >
-      <div className="font-semibold">{symbol}</div>
-      <div className="text-gray-500">{name}</div>
-    </div>
-  );
-}
-
-/* ===== 드래그 가능한 종목 ===== */
-function DraggableStock({ item, draggableId, removable, onRemove }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } =
-    useDraggable({ id: draggableId, data: { type: "stock", item } });
-
-  const style = { transform: CSS.Translate.toString(transform) };
-
-  return (
-    <div ref={setNodeRef} style={style} className="relative">
-      {/* 드래그 핸들은 카드 본문에만 부착 */}
-      <div {...listeners} {...attributes}>
-        <StockCard {...item} dragging={isDragging} />
-      </div>
-
-      {/* 그룹 내 삭제 버튼 */}
-      {removable && (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            e.preventDefault();
-            onRemove?.(item);
-          }}
-          className="absolute top-1 right-1 inline-flex items-center justify-center
-                     w-6 h-6 rounded-full bg-gray-200 text-gray-700 hover:bg-red-500 hover:text-white
-                     text-xs"
-          aria-label={`${item.symbol} 삭제`}
-          title="삭제"
-        >
-          ✕
-        </button>
-      )}
-    </div>
-  );
-}
-
-/* ===== 그룹(드롭 가능) ===== */
-function DroppableGroup({ id, header, children }) {
-  const { setNodeRef, isOver } = useDroppable({ id, data: { type: "group" } });
-  return (
-    <div
-      ref={setNodeRef}
-      className={`flex flex-col bg-gray-50 rounded-xl border ${
-        isOver ? "border-indigo-400" : "border-gray-200"
-      }`}
-    >
-      {header}
-      <div className="p-3 flex flex-col gap-2">{children}</div>
-    </div>
-  );
-}
-
-/* ===== 장바구니/검색 패널 ===== */
-function BasketPanel({ title, hint, children }) {
-  return (
-    <div className="flex flex-col bg-gray-50 rounded-xl border border-gray-200">
-      <div className="flex items-center justify-between px-4 py-2 border-b bg-white rounded-t-xl">
-        <h3 className="font-semibold">{title}</h3>
-        {hint && <span className="text-xs text-gray-500">{hint}</span>}
-      </div>
-      <div className="p-3 flex flex-col gap-2">{children}</div>
-    </div>
-  );
-}
+const useLikeSync = () => {
+  const hydrateFromRows = useLikeStore((s) => s.hydrateFromRows);
+  const reconcileRows = useLikeStore((s) => s.reconcileRows);
+  return { hydrateFromRows, reconcileRows };
+};
 
 export default function Dashboard() {
-  /* 소스 데이터 */
-  const [cart] = useState(cartStocks);
-  const [allStocks] = useState(allStocksData);
-
-  /* 그룹 상태 */
+  const [cart, setCart] = useState([]);
   const [groups, setGroups] = useState([
-    { id: "group-1", name: "그룹 1", items: [] },
-    { id: "group-2", name: "그룹 2", items: [] },
+    { id: "1", portfolioId: 1, name: "그룹 1", items: [] },
+    { id: "2", portfolioId: 2, name: "그룹 2", items: [] },
   ]);
-
-  /* 그룹명 편집 상태 */
+  const groupsRef = useRef(groups);
+  useEffect(() => {
+    groupsRef.current = groups;
+  }, [groups]);
+  const mgr = useMemo(
+    () =>
+      createGroupActions({
+        api: portfolioApi,
+        getGroups: () => groupsRef.current,
+        setGroups,
+      }),
+    []
+  );
   const [editingGroupId, setEditingGroupId] = useState(null);
   const [editingName, setEditingName] = useState("");
 
-  /* 검색 */
-  const [q, setQ] = useState("");
-  const showSearch = q.trim().length > 0;
-  const basketList = useMemo(() => {
-    if (!showSearch) return cart;
-    const kw = q.trim().toLowerCase();
-    return allStocks.filter(
-      (s) =>
-        s.symbol.toLowerCase().includes(kw) || s.name.toLowerCase().includes(kw)
-    );
-  }, [showSearch, q, cart, allStocks]);
-
+  /* 검색 상태 */
+  const [sort, setSort] = useState("ticker,asc");
+  const { q, setQ, showSearch, searchResult, loading, error } =
+    useDebouncedEtfSearch({ size: 5, sort, debounceMs: 250 });
+  const basketList = showSearch ? searchResult : cart;
   /* 드래그 미리보기 */
   const [activeItem, setActiveItem] = useState(null);
 
@@ -131,28 +60,122 @@ export default function Dashboard() {
     setActiveItem(it || null);
   };
 
+  // const onDragEnd = (e) => {
+  //   const { active, over } = e;
+  //   setActiveItem(null);
+  //   if (!over) return;
+
+  //   const item = active.data.current?.item;
+  //   if (!item) return;
+
+  //   const toId = over.id;
+  //   const [fromContainer] = String(active.id).split(":");
+  //   const isCopy = fromContainer === "cart" || fromContainer === "search";
+  //   const fromId = isCopy ? null : fromContainer;
+
+  //   if (!toId || fromId === toId) return;
+
+  //   setGroups((prev) => {
+  //     let updated = prev;
+  //     if (!isCopy && fromId) {
+  //       updated = removeFromGroup(updated, fromId, item.id);
+  //     }
+  //     return addToGroup(updated, toId, item);
+  //   });
+  // };
+
+  /**
+   * 좋아요 조회 관리
+   **/
+  const userId = useUserStore((s) => s.user?.id);
+  const { hydrateFromRows, reconcileRows } = useLikeSync();
+  const likeVersion = useLikeStore((s) => s.version);
+  const abortRef = useRef(null);
+  const timerRef = useRef(null);
+
+  const REFRESH_DELAY_MS = 500;
+
+  useEffect(() => {
+    // 직전 타이머/요청 정리
+    if (timerRef.current) clearTimeout(timerRef.current);
+    abortRef.current?.abort?.();
+
+    // 디바운스 타이머 시작
+    timerRef.current = setTimeout(() => {
+      const controller = new AbortController();
+      abortRef.current = controller;
+
+      (async () => {
+        try {
+          const res = await etfApi.fetchLikeEtf(
+            { page: 0, size: 50, _ts: Date.now() },
+            {
+              isAuth: true,
+              signal: controller.signal,
+              headers: { "Cache-Control": "no-cache" },
+            }
+          );
+          const data = res?.data?.data ?? res?.data ?? {};
+          const rowsRaw = (data.items ?? data.content ?? []).map((x) => ({
+            ...x,
+            id: x.id ?? x.ticker,
+            ticker: x.ticker,
+          }));
+
+          hydrateFromRows(rowsRaw);
+          const rows = reconcileRows(rowsRaw);
+          setCart(rows);
+        } catch (e) {
+          if (e?.name === "AbortError" || e?.name === "CanceledError") return;
+          console.error("즐겨찾기 로드 실패:", e);
+          setCart([]);
+        }
+      })();
+    }, REFRESH_DELAY_MS);
+
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      abortRef.current?.abort?.();
+    };
+  }, [userId, likeVersion, hydrateFromRows, reconcileRows]);
+
+  // 마운트/로그인 변경 시 조회
+  useEffect(() => {
+    const controller = new AbortController();
+    mgr.hydrateAll({ signal: controller.signal });
+    return () => controller.abort();
+  }, [userId]);
+
+  // DnD 끝났을 때
   const onDragEnd = (e) => {
     const { active, over } = e;
-    setActiveItem(null);
     if (!over) return;
-
     const item = active.data.current?.item;
     if (!item) return;
 
     const toId = over.id;
-    const [fromContainer] = String(active.id).split(":");
-    const isCopy = fromContainer === "cart" || fromContainer === "search";
-    const fromId = isCopy ? null : fromContainer;
+    const [fromBucket] = String(active.id).split(":");
+    const isCopy = fromBucket === "cart" || fromBucket === "search";
+    const fromId = isCopy ? null : fromBucket;
 
     if (!toId || fromId === toId) return;
 
-    setGroups((prev) => {
-      let updated = prev;
-      if (!isCopy && fromId) {
-        updated = removeFromGroup(updated, fromId, item.id);
-      }
-      return addToGroup(updated, toId, item);
-    });
+    if (!fromId) {
+      // 장바구니/검색 → 그룹 (복사/추가)
+      mgr.add({ toGroupId: toId, stock: item });
+    } else {
+      // 그룹 ↔ 그룹 이동
+      mgr.move({ fromGroupId: fromId, toGroupId: toId, stock: item });
+    }
+  };
+
+  // 그룹 내부 삭제 버튼
+  const handleRemoveFromGroup = (groupId, stockId) => {
+    const stock = groups
+      .find((g) => g.id === groupId)
+      ?.items.find((i) => i.id === stockId);
+    if (!stock) return;
+    mgr.remove({ fromGroupId: groupId, stock });
   };
 
   /* 그룹 조작 */
@@ -194,21 +217,23 @@ export default function Dashboard() {
     alert(`${group.name} 결과 보기 (종목 ${group.items.length}개)`);
   };
 
-  const handleRemoveFromGroup = (groupId, stockId) => {
-    setGroups((prev) => removeFromGroup(prev, groupId, stockId));
-  };
-
   return (
     <div className="w-full">
       {/* 상단 */}
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-bold">대시보드</h2>
-        <button
-          onClick={handleAddGroup}
-          className="px-3 py-1.5 text-sm rounded-md bg-gray-800 text-white hover:bg-black"
-        >
-          그룹 추가
-        </button>
+      <div className="mb-4">
+        <h2 className="text-4xl font-bold mb-4">대시보드</h2>
+        <div className="flex items-end justify-between">
+          <h4 className="text-lg font-semibold">
+            서비스 간략 설명(ex. 종목을 그룹에 추가하고 예상 배당+수익을
+            확인해보세요)
+          </h4>
+          <button
+            onClick={handleAddGroup}
+            className="px-3 py-1.5 text-sm rounded-md bg-gray-800 text-white hover:bg-black"
+          >
+            그룹 추가
+          </button>
+        </div>
       </div>
 
       <DndContext
@@ -216,35 +241,48 @@ export default function Dashboard() {
         onDragStart={onDragStart}
         onDragEnd={onDragEnd}
       >
-        <div className="grid grid-cols-12 gap-4">
+        <div className="grid grid-cols-12 gap-12">
           {/* 좌: 검색 + 장바구니 */}
           <div className="col-span-4">
-            <div className="mb-3">
-              <input
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="종목 검색 (심볼/이름)"
-                className="w-full border rounded-lg px-3 py-2"
-              />
-            </div>
-
-            <BasketPanel
-              title={showSearch ? "검색 결과" : "장바구니"}
-              hint={!showSearch ? "드래그해서 그룹에 담기" : undefined}
-            >
-              {basketList.length === 0 ? (
-                <div className="text-sm text-gray-500">비어있습니다.</div>
-              ) : (
-                basketList.map((item) => (
-                  <DraggableStock
-                    key={`${showSearch ? "search" : "cart"}-${item.id}`}
-                    draggableId={`${showSearch ? "search" : "cart"}:${item.id}`}
-                    item={item}
-                    removable={false}
+            <div className="flex flex-col bg-gray-0 rounded-xl border border-gray-200">
+              <div className="p-4">
+                <div className="mb-3">
+                  <input
+                    value={q}
+                    onChange={(e) => setQ(e.target.value)}
+                    placeholder="종목 검색 (심볼/이름)"
+                    className="w-full border rounded-lg px-3 py-2"
                   />
-                ))
-              )}
-            </BasketPanel>
+                </div>
+                <SortControls sort={sort} onChange={setSort} />
+              </div>
+
+              <div className=" border-b" />
+              <BasketPanel title={showSearch ? "검색 결과" : "장바구니"}>
+                {showSearch && loading && (
+                  <div className="text-sm text-gray-500">검색 중…</div>
+                )}
+                {showSearch && error && (
+                  <div className="text-sm text-red-600">
+                    검색 실패: {error.message}
+                  </div>
+                )}
+                {basketList.length === 0 ? (
+                  <div className="text-sm text-gray-500">비어있습니다.</div>
+                ) : (
+                  basketList.map((item) => (
+                    <DraggableStock
+                      key={`${showSearch ? "search" : "cart"}-${item.id}`}
+                      draggableId={`${showSearch ? "search" : "cart"}:${
+                        item.id
+                      }`}
+                      item={item}
+                      removable={false}
+                    />
+                  ))
+                )}
+              </BasketPanel>
+            </div>
           </div>
 
           {/* 우: 그룹들 */}
@@ -336,7 +374,7 @@ export default function Dashboard() {
         </div>
 
         <DragOverlay>
-          {activeItem ? <StockCard {...activeItem} dragging /> : null}
+          {activeItem ? <StockCard item={activeItem} dragging /> : null}
         </DragOverlay>
       </DndContext>
     </div>
